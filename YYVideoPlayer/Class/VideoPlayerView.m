@@ -12,7 +12,6 @@
 
 @property (nonatomic, strong) UIView *showView;
 @property (nonatomic, strong) UIButton *actionButton;
-
 @end
 
 @implementation VideoPlayerView
@@ -40,6 +39,7 @@
     self.showView.backgroundColor = [UIColor clearColor];
     self.showView.frame = self.bounds;
     [self addSubview:self.showView];
+        
     self.actionButton = [UIButton buttonWithType:UIButtonTypeCustom];
     self.actionButton.titleLabel.font = [UIFont systemFontOfSize:20];
     self.actionButton.backgroundColor = [UIColor whiteColor];

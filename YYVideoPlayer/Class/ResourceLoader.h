@@ -7,15 +7,15 @@
 
 @class ResourceLoader;
 
-@protocol LoaderDelegate <NSObject>
+@protocol ResourceLoaderDelegate <NSObject>
 @optional
 - (void)loader:(ResourceLoader *)loader cacheProgress:(CGFloat)progress;
 - (void)loader:(ResourceLoader *)loader failLoadingWithError:(NSError *)error;
 @end
 
-@interface ResourceLoader : NSObject<AVAssetResourceLoaderDelegate,RequestTaskDelegate>
+@interface ResourceLoader : NSObject<AVAssetResourceLoaderDelegate, RequestTaskDelegate>
 
-@property (nonatomic, weak) id<LoaderDelegate> delegate;
+@property (nonatomic, weak) id<ResourceLoaderDelegate> delegate;
 @property (atomic, assign) BOOL seekRequired; //Seek标识
 @property (nonatomic, assign) BOOL cacheFinished;
 @property (nonatomic, strong) RequestTask *requestTask;

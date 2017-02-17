@@ -13,17 +13,13 @@
 #import "NSURL+Category.h"
 #import "RequestTaskManager.h"
 
-@import CallKit;
-@import CoreTelephony;
-
-
 NSString *const kPlayerProgressChangedNotification = @"PlayerProgressChangedNotification";
 NSString *const kPlayerLoadProgressChangedNotification = @"PlayerLoadProgressChangedNotification";
 NSString *const kPlayerDidPlayeToEnd = @"PlayerDidPlayeToEnd";
 NSString *const kPlayerWillStartToPlay = @"PlayerWillStartToPlay";
 NSString *const kPlayerStatusFailed = @"kPlayerStatusFailed";
 
-@interface VideoPlayer () <AVAssetResourceLoaderDelegate, LoaderDelegate>
+@interface VideoPlayer () <AVAssetResourceLoaderDelegate, ResourceLoaderDelegate>
 
 @property (nonatomic, strong) ResourceLoader *resourceLoader;
 @property (nonatomic, strong) AVPlayer       *player;
@@ -32,11 +28,9 @@ NSString *const kPlayerStatusFailed = @"kPlayerStatusFailed";
 @property (nonatomic        ) id playbackTimeObserver;
 @property (nonatomic, weak  ) UIView         *containerView;
 @property (nonatomic, strong) AVURLAsset     *videoURLAsset;
-@property (nonatomic, assign) BOOL           isLocalVideo;  //是否播放本地文件
-@property (nonatomic, strong) VideoProgressBarView *progressView;
-@property (nonatomic, strong) UIImageView *coverView;       //封面
-@property (nonatomic, strong) CTCallCenter* callCenter;
-@property (nonatomic, strong) CXCallObserver* callObserver;
+@property (nonatomic, assign) BOOL           isLocalVideo;          //是否播放本地文件
+@property (nonatomic, strong) VideoProgressBarView *progressView;   //播放进度
+@property (nonatomic, strong) UILabel *loadingProgressLabel;        //已加载进度
 @end
 
 @implementation VideoPlayer
@@ -133,11 +127,7 @@ NSString *const kPlayerStatusFailed = @"kPlayerStatusFailed";
     self.currentPlayerLayer = [AVPlayerLayer playerLayerWithPlayer:self.player];
     self.currentPlayerLayer.frame = view.bounds;
     self.currentPlayerLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;//视频填充模式
-    if (self.coverView) {
-        [view.layer insertSublayer:self.currentPlayerLayer below:self.coverView.layer];
-    } else {
-        [view.layer addSublayer:self.currentPlayerLayer];
-    }
+    [view.layer addSublayer:self.currentPlayerLayer];
     [self setProgressBar];
     [self addObservers];
 }
@@ -153,11 +143,7 @@ NSString *const kPlayerStatusFailed = @"kPlayerStatusFailed";
     self.currentPlayerLayer = [AVPlayerLayer playerLayerWithPlayer:self.player];
     self.currentPlayerLayer.frame = view.bounds;
     self.currentPlayerLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;//视频填充模式
-    if (self.coverView) {
-        [view.layer insertSublayer:self.currentPlayerLayer below:self.coverView.layer];
-    } else {
-        [view.layer addSublayer:self.currentPlayerLayer];
-    }
+    [view.layer addSublayer:self.currentPlayerLayer];
     [self setProgressBar];
     [self addObservers];
 }
@@ -179,7 +165,6 @@ NSString *const kPlayerStatusFailed = @"kPlayerStatusFailed";
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
 {
     AVPlayerItem *playerItem = (AVPlayerItem *)object;
-    
     if ([keyPath isEqualToString:@"status"]) {
         if ([playerItem status] == AVPlayerItemStatusReadyToPlay) {
             //给播放器添加计时器
@@ -193,7 +178,6 @@ NSString *const kPlayerStatusFailed = @"kPlayerStatusFailed";
             [[NSNotificationCenter defaultCenter] postNotificationName:kPlayerStatusFailed object:self];
             //播放失败时重新下载再播放
             [self stop];
-            NSAssert(self.currentURL, @"self.currentURL nil");
             [self initStreamPlayer:self.currentURL inView:_containerView];
         }
     } else if ([keyPath isEqualToString:@"loadedTimeRanges"]) {
@@ -211,8 +195,6 @@ NSString *const kPlayerStatusFailed = @"kPlayerStatusFailed";
         }else {
             self.state = PlayerStatePlaying;
         }
-    } else if ([keyPath isEqualToString:@"playbackLikelyToKeepUp"]){
-       
     }
 }
 
@@ -464,6 +446,19 @@ NSString *const kPlayerStatusFailed = @"kPlayerStatusFailed";
     Float64 progress = time / duration;
     
     _progressView.progress = progress;
+}
+
+#pragma mark - ResourceLoaderDelegate
+- (void)loader:(ResourceLoader *)loader cacheProgress:(CGFloat)progress
+{
+    if (!self.loadingProgressLabel) {
+        self.loadingProgressLabel = [[UILabel alloc] init];
+        self.loadingProgressLabel.font = [UIFont systemFontOfSize:14.0];
+        self.loadingProgressLabel.textColor = [UIColor yellowColor];
+        self.loadingProgressLabel.frame = CGRectMake(0, 0, 120, 40);
+        [self.containerView addSubview:self.loadingProgressLabel];
+    }
+    self.loadingProgressLabel.text = [NSString stringWithFormat:@"buffering:%.2f", progress];
 }
 
 @end
