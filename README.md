@@ -25,8 +25,7 @@
 </code></pre>
 通过AVURLAsset传入视频文件的URL地址，AVPlayer既可以播放本地视频，也可以播放在线网络视频。但播放网络视频时，每次播放都要去视频服务器请求数据，这显然是很浪费流量的，而且整个过程中的数据流完全由AVPlayer控制，我们无法控制下载和播放，也就无法进行优化。我们要做到的是视频完整下载过一次之后，就将视频文件保存到本地，下一次再播放时就可以播放本地缓存视频，不再请求网络数据，从而快速播放视频。这就需要在播放器和网络视频服务器之间加一层视频文件加载的机制，在播放视频之前先检测本地是否已经缓存视频，如果有就直接播放，没有再去获取视频数据。
 
-苹果为我们提供了一种本地代理的方案，AVURLAsset 有个 AVAssetResourceLoader属性，通过其代理AVAssetResourceLoaderDelegate让播放器不再直接向视频URL服务器请求数据，而是向这个delegate询问数据。
-AVAssetResourceLoaderDelegate需要先将视频的URL协议转换为一个自定义的协议，一般URL都是http请求，比如http://test.yy.com/video.mp4， 需要将http协议改为自定义的scheme，比如stream://test.yy.com/video.mp4。在播放器通过修改后的URL请求视频数据时，本地代理截获这次请求，在经过本地的处理逻辑后，再向服务器请求数据，再将数据转发给播放器。
+苹果为我们提供了一种本地代理的方案，AVURLAsset 有个 AVAssetResourceLoader属性，通过其代理AVAssetResourceLoaderDelegate让播放器不再直接向视频URL服务器请求数据，而是向这个delegate询问数据。需要注意的时， AVAssetResourceLoader属性只有在custom URL schemes的AVURLAsset时才会调用其代理方法。因此， 在初始化AVURLAsset时需要先将视频的URL协议转换为一个自定义的协议，比如将视频url的http协议改为自定义的stream协议，这样，通过修改后的URL请求视频数据时，AVAssetResourceLoaderDelegate的代理方法就会被调用到，在代理方法里再向服务器请求数据，最后将数据转发给播放器。
 播放器部分代码如下：<pre><code>
 @property (nonatomic, strong) AVPlayer  *player;
 @property (nonatomic, strong) AVPlayerItem  *currentPlayerItem;
