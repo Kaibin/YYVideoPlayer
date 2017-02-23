@@ -2,11 +2,11 @@
   
   近期在做短视频相关的开发，需要实现一个可以支持断点续传的边下载边播放的视频播放器，整个过程涉及到视频文件的下载管理和播放，这篇文章就当做个总结吧。
 
-  首先是要确定作为播放器输入的视频文件格式， 由于MPEG4编码格式已经在各种移动设备广泛应用， 各安卓和iOS平台都支持MPEG4格式，因此播放器选择MPEG4作为视频文件格式。MPEG4格式有个规范，就是 MPEG4默认会将 moov atom放置于文件尾部，这个moov atom 是视频数据的索引，播放器需要先读取视频文件的索引数据才可以播放视频，因此如果要边下载边播放，那么就要将moov atom放置在视频数据前面。
+  首先是要确定作为播放器输入的视频文件格式， 由于MPEG4编码格式已经在各种移动设备广泛应用， 各安卓和iOS平台都支持MPEG4格式，因此播放器选择MPEG4作为视频文件格式。MPEG4默认会将 moov atom放置于文件尾部，这个moov atom 是视频数据的索引，播放器需要先读取这个索引数据才能播放视频，因此如果要支持边下载边播放，那么就要将moov atom放置在视频数据前面。
   
   关于moov atom元数据具体可查阅这篇文章：http://www.adobe.com/devnet/video/articles/mp4_movie_atom.html。
 
-  在iOS平台，如果视频是通过摄像头录制而来的，其输出的文件默认是.mov格式，可以通过AVAssetExportSession在mov转MPEG4时设置shouldOptimizeForNetworkUse = YES将 moov atom 移动到文件首部，使视频可以支持边下边播。
+  在iOS平台，如果视频文件是苹果的mov格式，可以通过AVAssetExportSession在mov转MPEG4时设置shouldOptimizeForNetworkUse = YES将 moov atom 移动到文件首部，使视频可以支持边下边播。
 
   视频播放器选择AVFoundation库中的AVPlayer，简单介绍播放过程需要用到的几个类：
 <ul>
@@ -26,7 +26,8 @@
 通过AVURLAsset传入视频文件的URL地址，AVPlayer既可以播放本地视频，也可以播放在线网络视频。但播放网络视频时，每次播放都要去视频服务器请求数据，这显然是很浪费流量的，而且整个过程中的数据流完全由AVPlayer控制，我们无法控制下载和播放，也就无法进行优化。我们要做到的是视频完整下载过一次之后，就将视频文件保存到本地，下一次再播放时就可以播放本地缓存视频，不再请求网络数据，从而快速播放视频。这就需要在播放器和网络视频服务器之间加一层视频文件加载的机制，在播放视频之前先检测本地是否已经缓存视频，如果有就直接播放，没有再去获取视频数据。
 
 苹果为我们提供了一种本地代理的方案，AVURLAsset 有个 AVAssetResourceLoader属性，通过其代理AVAssetResourceLoaderDelegate让播放器不再直接向视频URL服务器请求数据，而是向这个delegate询问数据。需要注意的时， AVAssetResourceLoader属性只有在custom URL schemes的AVURLAsset时才会调用其代理方法。因此， 在初始化AVURLAsset时需要先将视频的URL协议转换为一个自定义的协议，比如将视频url的http协议改为自定义的stream协议，这样，通过修改后的URL请求视频数据时，AVAssetResourceLoaderDelegate的代理方法就会被调用到，在代理方法里再向服务器请求数据，最后将数据转发给播放器。
-播放器部分代码如下：<pre><code>
+
+在开始播放时，先判断本地是否已经视频文件，如果已经缓存视频，则直接播放本地文件，否则先通过代理获取视频数据， VideoPlayer部分代码如下：<pre><code>
 @property (nonatomic, strong) AVPlayer  *player;
 @property (nonatomic, strong) AVPlayerItem  *currentPlayerItem;
 @property (nonatomic, strong) AVPlayerLayer  *currentPlayerLayer;
@@ -62,14 +63,15 @@ ResourceLoader实现的AVAssetResourceLoaderDelegate代理方法如下:
 }
 </code></pre>
   
-当视频播放器要加载视频时就通过这个代理方法发起一个AVAssetResourceLoadingRequest请求，AVAssetResourceLoadingRequest的dataRequest中的requestedOffset和requestedLength就是一次请求播放要播放的起始点和播放长度，只要向该请求提供数据就实现视频的分段播放。 这个代理方法会被调用多次以请求不同片段的视频数据。在实际过程中，我们会保存这些请求，然后在请求的数据响应完毕后再移除这些请求。接下来就是我们要获取视频数据提供给这些请求了。在第一次请求播放时，需要向视频URL服务器发起下载请求。
+当视频播放器要加载视频时就通过这个代理方法发起一个AVAssetResourceLoadingRequest请求，AVAssetResourceLoadingRequest的dataRequest中的requestedOffset和requestedLength就是一次请求播放要播放的起始点和播放长度，只要向该请求提供数据就实现视频的分段播放。这个代理方法会被调用多次以请求不同片段的视频数据。在实际过程中，我们会保存这些请求，然后在请求的数据响应完毕后再移除这些请求。接下来就是我们要获取视频数据提供给这些请求了。在第一次请求播放时，需要向视频URL服务器发起下载请求。
 ResourceLoader部分代码如下：
 <pre><code>
 - (void)addLoadingRequest:(AVAssetResourceLoadingRequest *)loadingRequest {
     [self.requestList addObject:loadingRequest];//保存播放器的数据请求
     @synchronized(self) {
         if (self.requestTask) {
-            if (loadingRequest.dataRequest.requestedOffset >= self.requestTask.requestOffset && //requestTask.requestOffset表示开始下载的起始点
+            //requestTask.requestOffset表示开始下载的起始点
+            if (loadingRequest.dataRequest.requestedOffset >= self.requestTask.requestOffset && 
                 loadingRequest.dataRequest.requestedOffset <= self.requestTask.requestOffset + self.requestTask.cacheLength) {
                 //数据已经缓存，则直接完成
                 [self processRequestList];
@@ -140,7 +142,7 @@ self.task = [self.session dataTaskWithRequest:request];
     if ([dic.allKeys containsObject:@"Content-Type"]) {
         NSString *contentType = [dic objectForKey:@"Content-Type"];
         if ([contentType rangeOfString:@"text/html"].location != NSNotFound) {
-            GTMLoggerError(@"******* response not return video mime type!!!");
+            NSLog(@"response not return video mime type!!!");
             [self retry];
             return;
         }
@@ -188,8 +190,8 @@ self.task = [self.session dataTaskWithRequest:request];
     [self.requestList removeObjectsInArray:finishRequestList];
 }
 - (BOOL)finishLoadingWithLoadingRequest:(AVAssetResourceLoadingRequest *)loadingRequest {
-    //填充信息
-    CFStringRef contentType = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, (__bridge CFStringRef)(@"video/mp4"), NULL);
+    //设置loadingRequest填充信息,这里要设置要加载的视频文件类型为video/mp4
+    CFStringRef contentType = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, (__bridge CFStringRef)(@"video/mp4"), NULL);
     loadingRequest.contentInformationRequest.contentType = CFBridgingRelease(contentType);//要加载的视频文件格式
     loadingRequest.contentInformationRequest.byteRangeAccessSupported = YES;
     loadingRequest.contentInformationRequest.contentLength = self.requestTask.fileLength;//视频总长度
