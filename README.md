@@ -141,9 +141,8 @@ self.task = [self.session dataTaskWithRequest:request];
     }
     if ([dic.allKeys containsObject:@"Content-Type"]) {
         NSString *contentType = [dic objectForKey:@"Content-Type"];
-        if ([contentType rangeOfString:@"text/html"].location != NSNotFound) {
+        if ([contentType rangeOfString:@"video/mp4"].location == NSNotFound) {
             NSLog(@"response not return video mime type!!!");
-            [self retry];
             return;
         }
     }
