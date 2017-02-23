@@ -13,6 +13,4 @@
 @property (nonatomic, strong) NSURL *fileURL;       //要播放的视频文件URL
 @property (nonatomic, strong) VideoPlayer *player;
 
-- (void)pausePlayer;
-
 @end

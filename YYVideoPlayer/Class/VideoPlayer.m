@@ -458,7 +458,7 @@ NSString *const kPlayerStatusFailed = @"kPlayerStatusFailed";
         self.loadingProgressLabel.frame = CGRectMake(0, 0, 120, 40);
         [self.containerView addSubview:self.loadingProgressLabel];
     }
-    self.loadingProgressLabel.text = [NSString stringWithFormat:@"buffering:%.2f", progress];
+    self.loadingProgressLabel.text = [NSString stringWithFormat:@"buffering:%.0f%%", progress*100];
 }
 
 @end
